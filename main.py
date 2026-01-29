@@ -2,6 +2,7 @@ from database import DatabaseHandler
 from bkk_client import BKKClient
 import logging
 import time
+import sys
 
 def main():
     logging.basicConfig(
@@ -18,33 +19,40 @@ def main():
 
     db = DatabaseHandler("bkk.db")
     client = BKKClient()
-    TARGETS = ("3040", "4060")
+    
+    TARGETS = ("3040", "3060") 
 
-    logging.info("Database connected. Client initalized.")
+    logging.info("Database connected. Client initialized.")
 
-    while True:
-        try:
+    try:
+        while True:
             logging.info("Starting batch fetch...")
+            
             # 1. Get vehicles
             vehicles = client.fetch_vehicles(TARGETS)
-            logging.info(f"Found {len(vehicles)} active.")
+            logging.info(f"Found {len(vehicles)} active vehicles.")
             
             for vehicle in vehicles:
-                db.save_vehicle(vehicle[0], vehicle[1], vehicle[2], vehicle[3], vehicle[4])
+                db.save_vehicle(*vehicle)
 
             # 2. Get trip updates
             updates = client.fetch_trip_updates(TARGETS)
             logging.info(f"Found {len(updates)} trip updates.")
 
             for update in updates:
-                db.save_trip_update(update[0], update[1], update[2], update[3], update[4], update[5])
-            print("Batch complete. Sleeping for 30 seconds...")
-        
-        except Exception as e:
-            logging.exception("Critical failure!")
-            print(f"Error: {e}")
+                db.save_trip_update(*update)
+            
+            logging.info("Batch complete. Sleeping for 30 seconds...")
+            time.sleep(30)
 
-        time.sleep(30)
+    except KeyboardInterrupt:
+        logging.info("User stopped script (Ctrl+C). Closing DB...")
+        db.close()
+        sys.exit(0)
+    except Exception as e:
+        logging.exception("Critical failure!")
+        print(f"Error: {e}")
+        db.close()
 
 if __name__ == "__main__":
     main()
