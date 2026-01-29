@@ -65,6 +65,7 @@ class BKKClient:
                         arr_time = 0
                         dep_delay = 0
                         dep_time = 0
+                        sid = stop.stop_id
                         stop_seq = stop.stop_sequence
 
                         # CAPTURE ARRIVAL
@@ -81,11 +82,8 @@ class BKKClient:
                             if stop.departure.HasField("time"):
                                 dep_time = stop.departure.time
 
-                        # Only save if we have meaningful data (either a delay OR a time)
                         if arr_delay != 0 or arr_time != 0 or dep_delay != 0 or dep_time != 0:
-                            trip_updates.append((timestamp, tid, rid, stop_seq, 
-                                                 arr_delay, arr_time, 
-                                                 dep_delay, dep_time))
+                            trip_updates.append((timestamp, tid, rid, sid, stop_seq, arr_delay, arr_time, dep_delay, dep_time))
 
             return trip_updates
         

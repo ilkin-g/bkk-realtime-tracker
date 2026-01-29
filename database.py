@@ -22,6 +22,7 @@ class DatabaseHandler:
                 timestamp INTEGER,
                 trip_id TEXT,
                 route_id TEXT,
+                stop_id TEXT,
                 stop_sequence INT,
                 arrival_delay INT,
                 arrival_time INT,
@@ -44,12 +45,9 @@ class DatabaseHandler:
     def save_vehicle(self, timestamp, route_id, vid, lat, lon):
         self.__insert_rows("vehicle_positions", timestamp, route_id, vid, lat, lon)
 
-    def save_trip_update(self, timestamp, trip_id, route_id, stop_sequence, 
-                         arrival_delay, arrival_time, 
-                         departure_delay, departure_time):
-        self.__insert_rows("trip_updates", timestamp, trip_id, route_id, stop_sequence, 
-                           arrival_delay, arrival_time, 
-                           departure_delay, departure_time)
+    def save_trip_update(self, timestamp, trip_id, route_id, stop_id, stop_sequence, arrival_delay, arrival_time, departure_delay, departure_time):
+        self.__insert_rows("trip_updates", timestamp, trip_id, route_id, stop_id, stop_sequence, arrival_delay, arrival_time, 
+                    departure_delay, departure_time)
 
     def close(self):
         self.connection.close()
