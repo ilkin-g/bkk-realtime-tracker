@@ -22,7 +22,8 @@ def main():
 
     logging.info("Pipeline starting up...")
 
-    db = DatabaseHandler("bkk.db")
+    db_path = config["database"]["path"]
+    db = DatabaseHandler(db_path)
     client = BKKClient()
     
     TARGETS = config["transit"]["target_routes"]

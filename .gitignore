@@ -3,6 +3,7 @@
 .env
 
 *.db
+*.duckdb
 *.log
 
 __pycache__/

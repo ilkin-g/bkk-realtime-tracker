@@ -6,4 +6,4 @@ transit:
   fetch_interval: 30
 
 database:
-  path: 'bkk.db'
+  path: 'bkk.duckdb'
