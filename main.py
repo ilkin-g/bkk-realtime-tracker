@@ -31,6 +31,7 @@ def main():
 
     try:
         while True:
+            start_time = time.time()
             logging.info("Starting batch fetch...")
             
             # 1. Get vehicles
@@ -47,8 +48,12 @@ def main():
             for update in updates:
                 db.save_trip_update(*update)
             
-            logging.info("Batch complete. Sleeping for 30 seconds...")
-            time.sleep(30)
+            elapsed = time.time() - start_time
+            fetch_interval = config["transit"]["fetch_interval"]
+            sleep_time = max(0, fetch_interval - elapsed)
+
+            logging.info(f"Batch finished in {elapsed:.2f} seconds. Sleeping for {sleep_time:.2f} seconds...")
+            time.sleep(sleep_time)
 
     except KeyboardInterrupt:
         logging.info("User stopped script (Ctrl+C). Closing DB...")
