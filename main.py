@@ -3,8 +3,13 @@ from bkk_client import BKKClient
 import logging
 import time
 import sys
+import yaml
 
 def main():
+    # Load yaml file
+    with open ("config.yaml", "r") as f:
+        config = yaml.safe_load(f)
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -20,7 +25,7 @@ def main():
     db = DatabaseHandler("bkk.db")
     client = BKKClient()
     
-    TARGETS = ("3040", "3060") 
+    TARGETS = config["transit"]["target_routes"]
 
     logging.info("Database connected. Client initialized.")
 

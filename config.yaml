@@ -1,0 +1,9 @@
+transit:
+  target_routes:
+    - '3040' # Tram 4
+    - '3060' # Tram 6
+
+  fetch_interval: 30
+
+database:
+  path: 'bkk.db'
