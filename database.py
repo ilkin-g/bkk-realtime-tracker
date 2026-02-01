@@ -103,6 +103,26 @@ class DatabaseHandler:
             FROM distinct_arrivals
         """)
 
+        self.connection.execute("""
+            CREATE OR REPLACE VIEW view_schedule_adherence AS
+            WITH latest_updates AS (
+                SELECT DISTINCT ON (trip_id, stop_sequence) 
+                    trip_id, stop_sequence, arrival_delay, arrival_time
+                FROM trip_updates
+                WHERE arrival_delay IS NOT NULL
+            )
+            SELECT 
+                lu.trip_id,
+                lu.stop_sequence,
+                lu.arrival_delay / 60.0 as delay_minutes, -- Convert seconds to minutes
+                ss.arrival_time as scheduled_string,
+                lu.arrival_time as actual_ts
+            FROM latest_updates lu
+            JOIN static_schedule ss 
+                ON lu.trip_id = ss.trip_id 
+                AND lu.stop_sequence = ss.stop_sequence
+        """)
+
     def save_vehicle(self, timestamp, route_id, vid, lat, lon):
         self.connection.execute(
             "INSERT INTO vehicle_positions VALUES (?, ?, ?, ?, ?)",

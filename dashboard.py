@@ -46,7 +46,7 @@ def get_time_filter_sql(table_name, time_col="timestamp"):
     else:
         return ""
 
-s_tab, h_tab = st.tabs(["Performance (Speed)", "Reliability (Headway)"])
+s_tab, h_tab, p_tab = st.tabs(["Performance (Speed)", "Reliability (Headway)", "Punctuality (Delay)"])
 
 with s_tab:
     st.header("Real-Time Network Speed")
@@ -115,4 +115,35 @@ with h_tab:
     
     else:
         st.info("Gathering data... wait for the next batch update.")
+
+with p_tab:
+    st.header("On-Time Performance (OTP)")
+
+    query = """
+        SELECT * FROM view_schedule_adherence 
+        WHERE delay_minutes > -30 AND delay_minutes < 30
+    """
+    df_delay = load_data(query)
+
+    if not df_delay.empty:
+        avg_delay = df_delay["delay_minutes"].mean()
+        
+        late_count = len(df_delay[df_delay["delay_minutes"] > 1.5]) 
+        early_count = len(df_delay[df_delay["delay_minutes"] < -1.0])
+        
+        col1, col2, col3 = st.columns(3)
+        
+        col1.metric("Avg Delay", f"{avg_delay:.1f} min", 
+                    delta="-Early" if avg_delay < 0 else "Late", delta_color="inverse")
+        col2.metric("Late Arrivals (>1.5m)", late_count)
+        col3.metric("Early Arrivals (<-1m)", early_count)
+
+        st.subheader("Lateness Distribution")
+        st.caption("Positive = Late | Negative = Early")
+        
+        hist_data = ((df_delay["delay_minutes"] * 2).round() / 2).value_counts().sort_index()
+        st.bar_chart(hist_data)
+        
+    else:
+        st.info("Gathering data... The Matchmaker is looking for pairs! (Wait for a few tram updates)")
     
