@@ -4,19 +4,15 @@ import yaml
 import numpy as np
 import pandas as pd
 
-def haversine(lat1, lon1, lat2, lon2):
-    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
-
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-    c = 2 * np.arcsin(np.sqrt(a)) 
-    r = 6371000
-    return c * r
-
 @st.cache_data(ttl=30)
 def load_data(query):
     local_conn = duckdb.connect(config['database']['path'], read_only=True)
+
+    try:
+        local_conn.execute("INSTALL spatial; LOAD spatial;")
+    except Exception:
+        pass
+        
     df = local_conn.execute(query).df()
     local_conn.close()
     return df
@@ -62,21 +58,9 @@ with s_tab:
     else:
         query = "SELECT * FROM view_tram_movement WHERE prev_lat IS NOT NULL"
     
-    # Load Data
     speed_df = load_data(query)
 
     if not speed_df.empty:
-        speed_df["dist_meters"] = haversine(
-            speed_df["lat"], speed_df["lon"],
-            speed_df["prev_lat"], speed_df["prev_lon"]
-        )
-
-        speed_df["time_diff"] = speed_df["timestamp"] - speed_df["prev_time"]
-
-        speed_df = speed_df[speed_df["time_diff"] > 0]
-
-        speed_df["speed_kmh"] = (speed_df["dist_meters"] / speed_df["time_diff"]) * 3.6
-
         active_trams = speed_df[
             (speed_df["speed_kmh"] > 1) & 
             (speed_df["speed_kmh"] < 80)
@@ -85,16 +69,8 @@ with s_tab:
         avg_speed = active_trams["speed_kmh"].mean()
         st.metric("Average Network Speed", f"{avg_speed:.1f} km/h")
 
-        st.map(active_trams)
-
         st.subheader("Traffic Heatmap")
         
-        # Split data by speed
-        fast = active_trams[active_trams['speed_kmh'] > 25]
-        medium = active_trams[(active_trams['speed_kmh'] <= 25) & (active_trams['speed_kmh'] > 10)]
-        slow = active_trams[active_trams['speed_kmh'] <= 10]
-        
-        # Create a legend
         st.caption("🔴 Stuck (<10km/h) | 🟡 Moving (10-25km/h) | 🟢 Fast (>25km/h)")
         
         map_data = pd.DataFrame({
@@ -114,8 +90,6 @@ with h_tab:
     st.header("Schedule Reliability")
     time_filter = get_time_filter_sql("view_tram_headway", time_col="arrival_time")
     
-    # Construct Query
-    # We combine your existing logic (> 0.5) with the new time filter
     if time_filter:
         query = f"SELECT * FROM view_tram_headway {time_filter} AND headway_min > 0.5 AND headway_min < 60"
     else:
