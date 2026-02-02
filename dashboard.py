@@ -1,4 +1,5 @@
 import streamlit as st
+import pydeck as pdk
 import duckdb
 import yaml
 import numpy as np
@@ -7,7 +8,6 @@ import pandas as pd
 @st.cache_data(ttl=30)
 def load_data(query):
     local_conn = duckdb.connect(config['database']['path'], read_only=True)
-
     try:
         local_conn.execute("INSTALL spatial; LOAD spatial;")
     except Exception:
@@ -19,9 +19,6 @@ def load_data(query):
 
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
-
-db_path = config["database"]["path"]
-conn = duckdb.connect(db_path, read_only=True)
 
 st.set_page_config(
     page_title="Budapest Tram Analytics",
@@ -70,18 +67,43 @@ with s_tab:
         st.metric("Average Network Speed", f"{avg_speed:.1f} km/h")
 
         st.subheader("Traffic Heatmap")
+        st.caption("🔴 Stuck (<10km/h) | 🟡 Moving | 🟢 Fast (>25km/h)")
         
-        st.caption("🔴 Stuck (<10km/h) | 🟡 Moving (10-25km/h) | 🟢 Fast (>25km/h)")
+        def get_color(speed):
+            if speed <= 10: return [255, 0, 0, 160]
+            if speed <= 25: return [255, 255, 0, 160]
+            return [0, 255, 0, 160]
+            
+        map_df = active_trams.copy()
+        map_df['color'] = map_df['speed_kmh'].apply(get_color)
+
+        view_state = pdk.ViewState(
+            latitude=47.4979, 
+            longitude=19.0402, 
+            zoom=12, 
+            pitch=0
+        )
+
+        layer = pdk.Layer(
+            "ScatterplotLayer",
+            data=map_df,
+            get_position='[lon, lat]',
+            get_radius=60,
+            get_fill_color='color',
+            pickable=True,
+            opacity=0.8,
+            stroked=True,
+            filled=True
+        )
+
+        r = pdk.Deck(
+            layers=[layer],
+            initial_view_state=view_state,
+            tooltip={"text": "Route: {route_id}\nSpeed: {speed_kmh} km/h"},
+            map_style=pdk.map_styles.CARTO_DARK
+        )
         
-        map_data = pd.DataFrame({
-            'lat': active_trams['lat'],
-            'lon': active_trams['lon'],
-            'color': active_trams['speed_kmh'].map(
-                lambda x: '#ff0000' if x <= 10 else ('#ffff00' if x <= 25 else '#00ff00')
-            )
-        })
-                
-        st.map(map_data, color="color")
+        st.pydeck_chart(r)
     
     else:
         st.warning("Not enough data yet. Wait for a few batch loops in main.py!")
@@ -101,17 +123,61 @@ with h_tab:
         col1, col2 = st.columns(2)
         
         avg_wait = df_headway["headway_min"].mean()
-
         bunching_events = len(df_headway[df_headway["headway_min"] < 2.0])
 
         col1.metric("Avg Wait Time", f"{avg_wait:.1f} min")
         col2.metric("Bunching Events", bunching_events, delta_color="inverse")
+        
         st.subheader("Distribution of Wait Times")
         st.caption("How long do passengers actually wait?")
         
-        hist_data = df_headway["headway_min"].round(1).value_counts().sort_index()
+        headway_data = df_headway[df_headway["headway_min"] < 20]["headway_min"]
         
-        st.bar_chart(hist_data)
+        if not headway_data.empty:
+            min_val = 0
+            max_val = headway_data.max()
+            
+            if pd.isna(max_val) or max_val == 0:
+                 st.info("Gathering more data for the curve...")
+            else:
+                bins = np.arange(min_val, max_val + 0.2, 0.1)
+                
+                counts, bin_edges = np.histogram(headway_data, bins=bins)
+                hist_df = pd.DataFrame({"Arrivals": counts}, index=np.round(bin_edges[:-1], 1))
+                
+                st.area_chart(hist_df, color="#00aabb")
+        else:
+             st.info("No wait time data available for this range.")
+
+        st.markdown("---")
+        st.subheader("The Worst Stops")
+        st.caption("Stops with the highest frequency of tram bunching (Headway < 2 min)")
+        
+        worst_stops_query = f"""
+            SELECT 
+                s.stop_name, 
+                COUNT(*) as total_arrivals,
+                COUNT(CASE WHEN v.headway_min < 2 THEN 1 END) as bunching_events,
+                ROUND(AVG(v.headway_min), 1) as avg_wait_min
+            FROM view_tram_headway v
+            JOIN stops s ON v.stop_id = s.stop_id
+            {time_filter}
+            AND s.stop_name NOT LIKE '%Széll Kálmán%' 
+            AND s.stop_name NOT LIKE '%Móricz Zsigmond%'
+            AND s.stop_name NOT LIKE '%Újbuda-központ%'
+            GROUP BY s.stop_name
+            HAVING total_arrivals > 5
+            ORDER BY bunching_events DESC
+            LIMIT 5
+        """
+        
+        worst_df = load_data(worst_stops_query)
+        if not worst_df.empty:
+            worst_df["avg_wait_min"] = worst_df["avg_wait_min"].apply(lambda x: f"{x:.1f}")
+            worst_df.columns = ["Stop Name", "Total Arrivals", "Bunching Events", "Avg Wait (min)"]
+            st.table(worst_df)
+        else:
+            st.info("Not enough data yet to identify Black Holes.")
     
     else:
         st.info("Gathering data... wait for the next batch update.")
@@ -126,24 +192,37 @@ with p_tab:
     df_delay = load_data(query)
 
     if not df_delay.empty:
-        avg_delay = df_delay["delay_minutes"].mean()
+        late_mask = df_delay["delay_minutes"] > 0
+        avg_late = df_delay.loc[late_mask, "delay_minutes"].mean() if late_mask.any() else 0.0
+        
+        early_mask = df_delay["delay_minutes"] < 0
+        avg_early = df_delay.loc[early_mask, "delay_minutes"].mean() if early_mask.any() else 0.0
         
         late_count = len(df_delay[df_delay["delay_minutes"] > 1.5]) 
-        early_count = len(df_delay[df_delay["delay_minutes"] < -1.0])
         
         col1, col2, col3 = st.columns(3)
-        
-        col1.metric("Avg Delay", f"{avg_delay:.1f} min", 
-                    delta="-Early" if avg_delay < 0 else "Late", delta_color="inverse")
-        col2.metric("Late Arrivals (>1.5m)", late_count)
-        col3.metric("Early Arrivals (<-1m)", early_count)
+        col1.metric("Avg Lateness", f"+{avg_late:.1f} min", "Late", delta_color="inverse")
+        col2.metric("Avg Earliness", f"{avg_early:.1f} min", "Early", delta_color="off") 
+        col3.metric("Severe Delays (>1.5m)", late_count, "Events", delta_color="inverse")
 
         st.subheader("Lateness Distribution")
         st.caption("Positive = Late | Negative = Early")
         
-        hist_data = ((df_delay["delay_minutes"] * 2).round() / 2).value_counts().sort_index()
-        st.bar_chart(hist_data)
+        if not df_delay["delay_minutes"].empty:
+            min_val = df_delay["delay_minutes"].min()
+            max_val = df_delay["delay_minutes"].max()
+            
+            if pd.isna(min_val) or pd.isna(max_val):
+                 st.info("Gathering data points...")
+            else:
+                bins = np.arange(np.floor(min_val), np.ceil(max_val) + 0.1, 0.1)
+                
+                counts, bin_edges = np.histogram(df_delay["delay_minutes"], bins=bins)
+                hist_df = pd.DataFrame({"Trams": counts}, index=np.round(bin_edges[:-1], 1))
+                
+                st.area_chart(hist_df, color="#3366cc")
+        else:
+            st.info("No delay data available to plot.")
         
     else:
         st.info("Gathering data... The Matchmaker is looking for pairs! (Wait for a few tram updates)")
-    
