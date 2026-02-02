@@ -1,9 +1,12 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY . /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install requests gtfs_realtime_bindings python-dotenv
+COPY . .
 
-CMD ["python", "-u", "main.py"]
+RUN chmod +x run_pipeline.sh
+
+CMD ["./run_pipeline.sh"]

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  # Service 1: The Pipeline (Runs import -> build -> main)
+  ingestion:
+    build: .
+    container_name: tram_ingestion
+    volumes:
+      - ./data:/app/data
+    restart: always
+
+  # Service 2: The Dashboard (Streamlit)
+  dashboard:
+    build: .
+    container_name: tram_dashboard
+    command: streamlit run dashboard.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - '8501:8501'
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - ingestion
