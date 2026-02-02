@@ -129,20 +129,22 @@ class DatabaseHandler:
                 AND lu.stop_sequence = ps.stop_sequence
         """)
 
-    def save_vehicle(self, timestamp, route_id, vid, lat, lon):
-        self.connection.execute(
+    def save_vehicles_bulk(self, vehicle_list):
+        if not vehicle_list:
+            return
+
+        self.connection.executemany(
             "INSERT INTO vehicle_positions VALUES (?, ?, ?, ?, ?)",
-            [timestamp, str(route_id), str(vid), lat, lon]
+            vehicle_list
         )
 
-    def save_trip_update(self, timestamp, trip_id, route_id, stop_id, stop_sequence, 
-                        arrival_delay, arrival_time, 
-                        departure_delay, departure_time):
-        
-        self.connection.execute(
+    def save_trip_updates_bulk(self, update_list):
+        if not update_list:
+            return
+
+        self.connection.executemany(
             "INSERT INTO trip_updates VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [timestamp, str(trip_id), str(route_id), str(stop_id), stop_sequence,
-            arrival_delay, arrival_time, departure_delay, departure_time]
+            update_list
         )
 
     def close(self):

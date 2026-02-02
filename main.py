@@ -39,15 +39,13 @@ def main():
             vehicles = client.fetch_vehicles(TARGETS)
             logging.info(f"Found {len(vehicles)} active vehicles.")
             
-            for vehicle in vehicles:
-                db.save_vehicle(*vehicle)
+            db.save_vehicles_bulk(vehicles)
 
             # 2. Get trip updates
             updates = client.fetch_trip_updates(TARGETS)
             logging.info(f"Found {len(updates)} trip updates.")
 
-            for update in updates:
-                db.save_trip_update(*update)
+            db.save_trip_updates_bulk(updates)
             
             elapsed = time.time() - start_time
             fetch_interval = config["transit"]["fetch_interval"]
