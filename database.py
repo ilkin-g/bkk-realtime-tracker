@@ -27,7 +27,6 @@ class DatabaseHandler:
             )
         ''')
 
-        # trip_updates table
         self.connection.execute('''
             CREATE TABLE IF NOT EXISTS trip_updates (
                 timestamp BIGINT,
@@ -83,7 +82,7 @@ class DatabaseHandler:
                 END as speed_kmh
             FROM with_lag
             WHERE prev_lat IS NOT NULL
-            AND dist_meters > 5 -- Filter out GPS drift (standing still noise)
+            AND dist_meters > 5
         """)
 
         self.connection.execute("""
@@ -93,7 +92,6 @@ class DatabaseHandler:
                     route_id, stop_id, trip_id, arrival_time
                 FROM trip_updates
                 WHERE stop_id IS NOT NULL
-                -- THIS LINE IS NEW & CRITICAL:
                 ORDER BY route_id, stop_id, trip_id, timestamp DESC
             )
             SELECT 
@@ -107,20 +105,28 @@ class DatabaseHandler:
             CREATE OR REPLACE VIEW view_schedule_adherence AS
             WITH latest_updates AS (
                 SELECT DISTINCT ON (trip_id, stop_sequence) 
-                    trip_id, stop_sequence, arrival_delay, arrival_time
+                    trip_id, stop_sequence, arrival_time
                 FROM trip_updates
-                WHERE arrival_delay IS NOT NULL
+                WHERE arrival_time IS NOT NULL
+            ),
+            parsed_schedule AS (
+                SELECT 
+                    trip_id, stop_sequence, arrival_time as scheduled_string,
+                    (CAST(SPLIT_PART(arrival_time, ':', 1) AS INTEGER) * 3600 +
+                     CAST(SPLIT_PART(arrival_time, ':', 2) AS INTEGER) * 60 +
+                    CAST(SPLIT_PART(arrival_time, ':', 3) AS INTEGER)) as sched_sec_midnight
+                FROM static_schedule
             )
             SELECT 
                 lu.trip_id,
                 lu.stop_sequence,
-                lu.arrival_delay / 60.0 as delay_minutes, -- Convert seconds to minutes
-                ss.arrival_time as scheduled_string,
+                ((lu.arrival_time % 86400) + 3600 - ps.sched_sec_midnight) / 60.0 as delay_minutes,
+                ps.scheduled_string,
                 lu.arrival_time as actual_ts
             FROM latest_updates lu
-            JOIN static_schedule ss 
-                ON lu.trip_id = ss.trip_id 
-                AND lu.stop_sequence = ss.stop_sequence
+            JOIN parsed_schedule ps 
+                ON lu.trip_id = ps.trip_id 
+                AND lu.stop_sequence = ps.stop_sequence
         """)
 
     def save_vehicle(self, timestamp, route_id, vid, lat, lon):
@@ -132,9 +138,6 @@ class DatabaseHandler:
     def save_trip_update(self, timestamp, trip_id, route_id, stop_id, stop_sequence, 
                         arrival_delay, arrival_time, 
                         departure_delay, departure_time):
-        
-        # We construct the list in the EXACT order of the SQL table columns
-        # Table: (timestamp, trip_id, route_id, stop_id, stop_sequence, arr_delay, arr_time, dep_delay, dep_time)
         
         self.connection.execute(
             "INSERT INTO trip_updates VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
