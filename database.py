@@ -9,7 +9,8 @@ class DatabaseHandler:
 
         try:
             self.connection.execute("INSTALL spatial; LOAD spatial;")
-            logging.info("DuckDB Spatial extension loaded.")
+            self.connection.execute("INSTALL icu; LOAD icu;")
+            logging.info("DuckDB Spatial & ICU extensions loaded.")
         except Exception as e:
             logging.error(f"Could not load Spatial extension: {e}")
 
@@ -112,15 +113,26 @@ class DatabaseHandler:
             parsed_schedule AS (
                 SELECT 
                     trip_id, stop_sequence, arrival_time as scheduled_string,
+                    -- Parse "14:30:00" into seconds from midnight
                     (CAST(SPLIT_PART(arrival_time, ':', 1) AS INTEGER) * 3600 +
                      CAST(SPLIT_PART(arrival_time, ':', 2) AS INTEGER) * 60 +
-                    CAST(SPLIT_PART(arrival_time, ':', 3) AS INTEGER)) as sched_sec_midnight
+                     CAST(SPLIT_PART(arrival_time, ':', 3) AS INTEGER)) as sched_sec_midnight        
                 FROM static_schedule
             )
             SELECT 
                 lu.trip_id,
                 lu.stop_sequence,
-                ((lu.arrival_time % 86400) + 3600 - ps.sched_sec_midnight) / 60.0 as delay_minutes,
+                -- THE FIX: Dynamic Timezone Conversion
+                -- 1. to_timestamp() converts the UTC integer to a UTC timestamp object
+                -- 2. timezone('Europe/Budapest', ...) shifts it to local time (handling DST automatically)
+                -- 3. We extract the hour/min/sec from that LOCAL time to compare with the schedule
+                (
+                    (date_part('hour', timezone('Europe/Budapest', to_timestamp(lu.arrival_time))) * 3600) +
+                    (date_part('minute', timezone('Europe/Budapest', to_timestamp(lu.arrival_time))) * 60) +
+                    (date_part('second', timezone('Europe/Budapest', to_timestamp(lu.arrival_time))))
+                    - ps.sched_sec_midnight
+                ) / 60.0 as delay_minutes,
+                
                 ps.scheduled_string,
                 lu.arrival_time as actual_ts
             FROM latest_updates lu
