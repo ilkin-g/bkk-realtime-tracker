@@ -1,5 +1,5 @@
-from database import DatabaseHandler
-from bkk_client import BKKClient
+from src.database import DatabaseHandler
+from src.client import BKKClient
 import logging
 import time
 import sys
