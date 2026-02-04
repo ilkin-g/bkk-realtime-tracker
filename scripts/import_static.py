@@ -11,7 +11,7 @@ with open("config.yaml", "r") as f:
 DB_PATH = config['database']['path']
 
 URL = "https://go.bkk.hu/api/static/v1/public-gtfs/budapest_gtfs.zip"
-print(f"⬇️ Downloading GTFS data...")
+print(f"Downloading GTFS data...")
 response = requests.get(URL)
 
 if response.status_code != 200:
@@ -49,7 +49,7 @@ with zipfile.ZipFile(io.BytesIO(response.content)) as z:
         print("stops.txt missing!")
         stops_df = pd.DataFrame()
 
-    print(f"💾 Writing to {DB_PATH}...")
+    print(f"Writing to {DB_PATH}...")
     conn = duckdb.connect(DB_PATH)
     
     conn.execute("DROP TABLE IF EXISTS static_schedule")
