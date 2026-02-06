@@ -1,6 +1,6 @@
 # 🚋 Budapest Real-Time Tram Analytics Pipeline
 
-![Python](https://img.shields.io/badge/Python-3.9-blue) ![DuckDB](https://img.shields.io/badge/DuckDB-Spatial-yellow) ![Docker](https://img.shields.io/badge/Container-Docker-blue) ![Streamlit](https://img.shields.io/badge/Frontend-Streamlit-red)
+![Tests](https://github.com/ilkin-g/bkk-realtime-tracker/actions/workflows/tests.yml/badge.svg)![Python](https://img.shields.io/badge/Python-3.11-blue) ![DuckDB](https://img.shields.io/badge/DuckDB-Spatial-yellow) ![Docker](https://img.shields.io/badge/Container-Docker-blue) ![Streamlit](https://img.shields.io/badge/Frontend-Streamlit-red)
 
 **A high-performance data pipeline that consumes real-time GTFS-RT binary feeds to visualize traffic patterns, schedule adherence, and "bunching" events for the Budapest tram network.**
 
