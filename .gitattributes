@@ -1,0 +1,5 @@
+# Force shell scripts to always use Linux line endings
+*.sh text eol=lf
+
+# Keep other files standard
+* text=auto
